@@ -11,7 +11,7 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from m3er_model import EarlyStopping
+from m3er_model import M3ER, EarlyStopping
 
 
 class MOSEIDataset(Dataset):
