@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +12,15 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from m3er_model import M3ER, EarlyStopping
+# Import dari m3er_model - handle both local and Kaggle paths
+try:
+    from m3er_model import M3ER, EarlyStopping
+except ImportError:
+    # If running from Kaggle, add parent directory to path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+    from m3er_model import M3ER, EarlyStopping
 
 
 class MOSEIDataset(Dataset):
