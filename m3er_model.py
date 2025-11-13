@@ -335,6 +335,43 @@ class M3ER(nn.Module):
             "memory": memory,
         }
 
+    def compute_loss(self, outputs, targets):
+        """
+        Compute total loss combining multiplicative fusion loss and final prediction loss
+
+        Args:
+            outputs: Dictionary dari forward() berisi predictions
+            targets: Ground truth labels (batch_size,)
+
+        Returns:
+            total_loss: Combined loss
+            loss_dict: Dictionary berisi breakdown loss components
+        """
+        # Loss untuk multiplicative fusion
+        predictions = [
+            outputs["pred_speech"],
+            outputs["pred_text"],
+            outputs["pred_visual"],
+        ]
+        fusion_loss = self.fusion.compute_loss(predictions, targets)
+
+        # Loss untuk final prediction (cross entropy)
+        criterion = nn.CrossEntropyLoss()
+        final_loss = criterion(outputs["final_pred"], targets)
+
+        # Combined loss - sesuai paper, gunakan weighted sum
+        alpha = 0.5  # Weight balance antara fusion dan final loss
+        total_loss = alpha * fusion_loss + (1 - alpha) * final_loss
+
+        # Return loss details untuk monitoring
+        loss_dict = {
+            "fusion_loss": fusion_loss.item(),
+            "final_loss": final_loss.item(),
+            "total_loss": total_loss.item(),
+        }
+
+        return total_loss, loss_dict
+
 
 # Training utilities
 class EarlyStopping:
