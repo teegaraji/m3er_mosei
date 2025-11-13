@@ -413,7 +413,7 @@ class M3ERTrainer:
 if __name__ == "__main__":
     # Configuration
     config = {
-        "data_dir": "processed_mosei_data",
+        "data_dir": "/kaggle/input/mosei-preprocess",
         "batch_size": 32,
         "learning_rate": 0.001,
         "weight_decay": 1e-5,
