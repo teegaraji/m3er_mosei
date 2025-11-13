@@ -11,6 +11,8 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+from m3er_model import M3ER, EarlyStopping
+
 
 class MOSEIDataset(Dataset):
     """Dataset class untuk CMU-MOSEI"""
@@ -445,5 +447,4 @@ if __name__ == "__main__":
 
     with open("training_results.json", "w") as f:
         json.dump(results, f, indent=4)
-
     print("\n✓ All results saved!")
