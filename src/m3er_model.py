@@ -138,147 +138,29 @@ class ProxyFeatureGenerator(nn.Module):
 
 class MultiplicativeFusion(nn.Module):
     """
-    M3ER: Multiplicative Multimodal Emotion Recognition
+    Multiplicative Fusion Layer dengan modified loss (Equation 3 dari paper)
     """
 
-    def __init__(self, config):
-        super(M3ER, self).__init__()
+    def __init__(self, n_modalities=3, n_classes=6, beta=1.0):
+        super(MultiplicativeFusion, self).__init__()
+        self.n_modalities = n_modalities
+        self.n_classes = n_classes
+        self.beta = beta
 
-        self.config = config
-        self.timestep = config["timestep"]
-        self.feature_dims = config["feature_dims"]
-        self.n_classes = config["n_classes"]
-
-        # LSTM untuk setiap modality (seperti di paper)
-        self.lstm_speech = nn.LSTM(
-            input_size=self.feature_dims["speech"],
-            hidden_size=32,
-            num_layers=1,
-            batch_first=True,
-            bidirectional=False,
-        )
-
-        self.lstm_text = nn.LSTM(
-            input_size=self.feature_dims["text"],
-            hidden_size=32,
-            num_layers=1,
-            batch_first=True,
-            bidirectional=False,
-        )
-
-        self.lstm_visual = nn.LSTM(
-            input_size=self.feature_dims["visual"],
-            hidden_size=32,
-            num_layers=1,
-            batch_first=True,
-            bidirectional=False,
-        )
-
-        # Memory variable
-        self.memory_dim = 128
-
-        # Attention module
-        self.attention_dim = 32
-        self.attention_speech = nn.Linear(32 + self.memory_dim, self.attention_dim)
-        self.attention_text = nn.Linear(32 + self.memory_dim, self.attention_dim)
-        self.attention_visual = nn.Linear(32 + self.memory_dim, self.attention_dim)
-
-        # Memory update
-        self.memory_update = nn.Linear(96 + self.memory_dim, self.memory_dim)
-
-        # Classification heads untuk setiap modality
-        self.classifier_speech = nn.Sequential(
-            nn.Linear(32, 32), nn.ReLU(), nn.Dropout(0.3), nn.Linear(32, self.n_classes)
-        )
-
-        self.classifier_text = nn.Sequential(
-            nn.Linear(32, 32), nn.ReLU(), nn.Dropout(0.3), nn.Linear(32, self.n_classes)
-        )
-
-        self.classifier_visual = nn.Sequential(
-            nn.Linear(32, 32), nn.ReLU(), nn.Dropout(0.3), nn.Linear(32, self.n_classes)
-        )
-
-        # Final fusion layer
-        self.fusion = MultiplicativeFusion(
-            n_modalities=3, n_classes=self.n_classes, beta=config.get("beta", 1.0)
-        )
-
-        # Final classifier - INPUT DARI FUSION OUTPUT (n_classes dimension)
-        # Fusion output shape: (batch_size, n_classes)
-        # Concat dengan memory: n_classes + memory_dim
-        self.final_classifier = nn.Sequential(
-            nn.Linear(self.n_classes + self.memory_dim, 64),  # 6 + 128 = 134
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(64, self.n_classes),
-        )
-
-        # Proxy feature generator
-        self.proxy_generator = ProxyFeatureGenerator(self.feature_dims)
-
-    def forward(self, speech, text, visual, memory=None):
+    def forward(self, predictions):
         """
-        Forward pass sesuai paper architecture
+        predictions: List of prediction tensors dari setiap modality
+                     Each tensor shape: (batch_size, n_classes)
         """
-        batch_size = speech.size(0)
+        # Stack predictions
+        stacked_preds = torch.stack(
+            predictions, dim=0
+        )  # (n_modalities, batch_size, n_classes)
 
-        # Initialize memory if not provided
-        if memory is None:
-            memory = torch.zeros(batch_size, self.memory_dim).to(speech.device)
+        # Multiplicative combination
+        combined = torch.mean(stacked_preds, dim=0)
 
-        # LSTM processing
-        lstm_out_speech, _ = self.lstm_speech(speech)
-        lstm_out_text, _ = self.lstm_text(text)
-        lstm_out_visual, _ = self.lstm_visual(visual)
-
-        # Take last timestep output
-        h_speech = lstm_out_speech[:, -1, :]  # (batch, 32)
-        h_text = lstm_out_text[:, -1, :]
-        h_visual = lstm_out_visual[:, -1, :]
-
-        # Attention mechanism
-        speech_mem = torch.cat([h_speech, memory], dim=1)
-        text_mem = torch.cat([h_text, memory], dim=1)
-        visual_mem = torch.cat([h_visual, memory], dim=1)
-
-        attn_speech = torch.sigmoid(self.attention_speech(speech_mem))
-        attn_text = torch.sigmoid(self.attention_text(text_mem))
-        attn_visual = torch.sigmoid(self.attention_visual(visual_mem))
-
-        # Apply attention
-        h_speech = h_speech * attn_speech
-        h_text = h_text * attn_text
-        h_visual = h_visual * attn_visual
-
-        # Update memory
-        combined_features = torch.cat([h_speech, h_text, h_visual, memory], dim=1)
-        memory = torch.tanh(self.memory_update(combined_features))
-
-        # Individual predictions untuk multiplicative fusion
-        pred_speech = self.classifier_speech(h_speech)  # (batch, n_classes)
-        pred_text = self.classifier_text(h_text)
-        pred_visual = self.classifier_visual(h_visual)
-
-        # Multiplicative fusion
-        fused_pred = self.fusion(
-            [pred_speech, pred_text, pred_visual]
-        )  # (batch, n_classes)
-
-        # Final prediction - GUNAKAN FUSION OUTPUT + MEMORY
-        final_input = torch.cat(
-            [fused_pred, memory], dim=1
-        )  # (batch, n_classes + memory_dim)
-        final_pred = self.final_classifier(final_input)  # (batch, n_classes)
-
-        return {
-            "final_pred": final_pred,
-            "fused_pred": fused_pred,
-            "pred_speech": pred_speech,
-            "pred_text": pred_text,
-            "pred_visual": pred_visual,
-            "memory": memory,
-        }
+        return combined
 
     def compute_loss(self, predictions, targets):
         """

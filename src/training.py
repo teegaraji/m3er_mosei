@@ -11,8 +11,6 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from m3er_model import M3ER, EarlyStopping
-
 
 class MOSEIDataset(Dataset):
     """Dataset class untuk CMU-MOSEI"""
@@ -415,7 +413,7 @@ class M3ERTrainer:
 if __name__ == "__main__":
     # Configuration
     config = {
-        "data_dir": "/kaggle/input/mosei-preprocess",
+        "data_dir": "processed_mosei_data",
         "batch_size": 32,
         "learning_rate": 0.001,
         "weight_decay": 1e-5,
@@ -447,4 +445,5 @@ if __name__ == "__main__":
 
     with open("training_results.json", "w") as f:
         json.dump(results, f, indent=4)
+
     print("\n✓ All results saved!")
